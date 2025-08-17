@@ -22,11 +22,12 @@ const (
 
 // bucket for 24 hours for each minute
 type series struct {
+	Token       string
 	StartMinute int64
-	Buckets     [windowMinutes]model.Bucket
+	Buckets     []model.Bucket
 }
 
-// Engine is in-memory store for fast answer and webSocket push
+// Engine is an in-memory store for fast answer and webSocket push
 // True value stores in redisStore.Store
 type Engine struct {
 	mu     sync.Mutex
@@ -35,6 +36,7 @@ type Engine struct {
 	store *redisStorage.Store
 	wsHub *webSocket.Hub
 }
+
 type EngineInterface interface {
 	Stats(token string, now time.Time) model.Stats
 	Load() error
@@ -66,22 +68,21 @@ func (e *Engine) Stats(token string, now time.Time) model.Stats {
 		}
 		var bucket model.Bucket
 		var idx int
-		fmt.Println(from, nowMin)
+
 		for m := from; m <= nowMin; m++ {
 			idx = int(m-s.StartMinute) % windowMinutes
-			fmt.Println(s.Buckets[idx])
 			bucket.Count += s.Buckets[idx].Count
 			bucket.USD += s.Buckets[idx].USD
 			bucket.Quantity += s.Buckets[idx].Quantity
 		}
-		fmt.Println(bucket)
+
 		return bucket
 	}
 
 	return model.Stats{
 		Token:          token,
-		BucketMinutes5: sumRange(1), // for testing
-		BucketHours1:   sumRange(2),
+		BucketMinutes5: sumRange(5),
+		BucketHours1:   sumRange(60),
 		BucketHours24:  sumRange(windowMinutes),
 		UpdatedAt:      time.Now().Unix(),
 	}
@@ -93,52 +94,78 @@ func (e *Engine) Load() error {
 	if err != nil {
 		return err
 	}
+
+	nowMin := unixMin(time.Now().UTC())
+	start := nowMin - int64(windowMinutes) + 1
+	end := nowMin
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	nowMin := time.Now().UTC().Unix() / 60
+
+	e.series = make(map[string]*series, len(all))
+
 	for token, fields := range all {
-		s := &series{StartMinute: nowMin - windowMinutes + 1}
-		// fields: map[string]string where key like "<minute>#c" / "<minute>#u" / "<minute>#q"
-		// check lua script for details
-		for fname, fval := range fields {
+		s := &series{StartMinute: start}
+		// buckets нулями по умолчанию
+
+		for fname, raw := range fields {
+			// ожидаем формат "<minute>#<kind>", где kind ∈ {c,u,q}
 			parts := strings.Split(fname, "#")
 			if len(parts) != 2 {
 				continue
 			}
-			minStr := parts[0]
-			kind := parts[1]
-			minute, err := strconv.ParseInt(minStr, 10, 64)
+			minute, err := strconv.ParseInt(parts[0], 10, 64)
 			if err != nil {
 				continue
 			}
-			if minute < s.StartMinute || minute > s.StartMinute+windowMinutes-1 {
-				log.Println("[err] How we got out of range minute:", minute, "for token", token)
-				continue // skip out of range or IDK?
+			kind := parts[1]
+
+			// игнорируем всё вне нашего окна [start..end]
+			if minute < start || minute > end {
+				continue
 			}
-			idx := int((minute - s.StartMinute) % windowMinutes)
+
+			idx := int(minute - s.StartMinute)
+			if idx < 0 || idx >= windowMinutes {
+				continue
+			}
+
 			switch kind {
-			case "c": // count
-				if v, err := strconv.ParseUint(fval, 10, 64); err == nil {
+			case "c":
+				if v, err := strconv.ParseUint(raw, 10, 64); err == nil {
 					s.Buckets[idx].Count = v
 				}
-			case "u": // USD
-				if v, err := strconv.ParseFloat(fval, 64); err == nil {
+			case "u":
+				if v, err := strconv.ParseFloat(raw, 64); err == nil {
 					s.Buckets[idx].USD = v
 				}
-			case "q": // quantity
-				if v, err := strconv.ParseFloat(fval, 64); err == nil {
+			case "q":
+				if v, err := strconv.ParseFloat(raw, 64); err == nil {
 					s.Buckets[idx].Quantity = v
 				}
 			}
 		}
+
 		e.series[token] = s
 	}
+
 	return nil
 }
 
 // apply event to in-memory store and redis
 // returns true if event applied and not duplicated
 func (e *Engine) Apply(ev model.SwapEvent) (bool, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	now := time.Now().UTC()
+	nowMin := unixMin(now)
+
+	evMin := unixMin(ev.ExecutedAt.UTC())
+	if evMin > nowMin {
+		evMin = nowMin
+	}
+
 	applied, err := e.store.ApplyEvent(ev) // apply event atomically to redis
 	if err != nil {
 		return false, err
@@ -147,25 +174,30 @@ func (e *Engine) Apply(ev model.SwapEvent) (bool, error) {
 		return false, nil
 	}
 
-	now := time.Now()
-	e.mu.Lock()
 	s := e.ensureSeries(ev.TokenID, now)
-	e.advanceTo(s, unixMin(now))
-	evMin := unixMin(ev.ExecutedAt)
-	var idx int
-	if evMin >= s.StartMinute {
-		idx = int((evMin - s.StartMinute) % windowMinutes)
-		b := s.Buckets[idx]
-		b.Count++
-		b.USD += ev.USD
-		b.Quantity += ev.Amount
-		s.Buckets[idx] = b
+	e.advanceTo(s, nowMin)
+	if evMin < s.StartMinute {
+		//too ald event > 24hrs
+		return false, fmt.Errorf("invalid start minute: %d", evMin)
 	}
-	e.mu.Unlock()
+	if evMin > nowMin {
+		//event from future
+		return false, fmt.Errorf("invalid end minute: %d", evMin)
+	}
+	idx := int(evMin - s.StartMinute)
+	if idx < 0 || idx >= len(s.Buckets) {
+		//out of window
+		return false, fmt.Errorf("invalid index: %d", idx)
+	}
+	s.Buckets[idx].Count++
+	s.Buckets[idx].USD += ev.USD
+	s.Buckets[idx].Quantity += ev.Amount
 
 	// Broadcast updated stats via webSocket
-	//st := e.Stats(ev.TokenID, time.Now())
-	//e.wsHub.Broadcast(ev.TokenID, st)
+	go func() {
+		st := e.Stats(ev.TokenID, time.Now())
+		e.wsHub.Broadcast(ev.TokenID, st)
+	}()
 	return true, nil
 }
 
@@ -173,28 +205,35 @@ func (e *Engine) ensureSeries(token string, now time.Time) *series {
 	if s, ok := e.series[token]; ok {
 		return s
 	}
-	start := unixMin(now) - windowMinutes + 1
-	s := &series{StartMinute: start}
+	s := &series{
+		Token:       token,
+		StartMinute: unixMin(now) - windowMinutes + 1,
+		Buckets:     make([]model.Bucket, windowMinutes),
+	}
 	e.series[token] = s
 	return s
 }
 
-func (e *Engine) advanceTo(s *series, to int64) {
+func (e *Engine) advanceTo(s *series, nowMin int64) {
 	curEnd := s.StartMinute + windowMinutes - 1
-	if to <= curEnd {
-		return
+	if nowMin <= curEnd {
+		return // window already covers cur minute
 	}
-	steps := to - curEnd
+	steps := nowMin - curEnd
 	if steps >= windowMinutes {
 		for i := range s.Buckets {
 			s.Buckets[i] = model.Bucket{}
 		}
-		s.StartMinute = to - windowMinutes + 1
+		s.StartMinute = nowMin - windowMinutes + 1
 		return
 	}
-	for i := int64(0); i < steps; i++ {
-		idx := int((s.StartMinute + i) % windowMinutes)
-		s.Buckets[idx] = model.Bucket{}
+
+	offset := steps
+	if offset >= 0 {
+		copy(s.Buckets, s.Buckets[offset:])
+		for i := windowMinutes - offset; i < windowMinutes; i++ {
+			s.Buckets[i] = model.Bucket{}
+		}
 	}
 	s.StartMinute += steps
 }

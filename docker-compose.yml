@@ -12,7 +12,7 @@ services:
       REDIS_PASSWORD: ""
       REDIS_DB: "0"
       DEDUPE_TTL: "25h"
-      DEBUG: "false"
+      DEBUG: "false"  # Включите отладку для большего количества логов
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -21,11 +21,20 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 5s
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    command: [
+      "redis-server",
+      "--appendonly", "yes",
+      "--appendfsync", "everysec",
+      "--save", "300", "10",
+      "--save", "60", "1000",
+      "--save", "10", "10000",
+      "--auto-aof-rewrite-percentage", "100",
+      "--auto-aof-rewrite-min-size", "64mb"
+    ]
     ports:
       - "6379:6379"
     volumes:
@@ -40,3 +49,4 @@ services:
 
 volumes:
   redis-data:
+    driver: local
