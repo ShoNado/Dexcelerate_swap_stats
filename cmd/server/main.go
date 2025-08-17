@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"os/signal"
@@ -111,7 +111,7 @@ func DemoProducer(_ context.Context, out chan model.SwapEvent) {
 		ev = model.SwapEvent{
 			EventID:    "ev:" + now.Format(time.RFC3339Nano) + ":" + []string{"a", "b", "c", "d", "f"}[id%5],
 			TokenID:    tokens[id%len(tokens)],
-			Amount:     rand.Float64() + 2,
+			Amount:     rand.Float64() + 2.0,
 			USD:        1111.1 + float64(id%100),
 			Side:       model.Sides[id%2],
 			Rate:       2222.2 + float64(id%100),

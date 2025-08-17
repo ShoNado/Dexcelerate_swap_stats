@@ -50,7 +50,7 @@ func (s *Store) ApplyEvent(ev model.SwapEvent) (bool, error) {
 	ttlStr := strconv.FormatInt(s.dedupleTTL, 10)
 
 	res, err := s.cli.Eval(s.ctx, s.script, []string{dedupeKey, seriesKey, tokenSet},
-		ev.EventID, minute, usdStr, quantityStr, ttlStr).Result()
+		ev.EventID, minute, usdStr, quantityStr, ttlStr, ev.TokenID).Result()
 	if err != nil {
 		return false, err
 	}

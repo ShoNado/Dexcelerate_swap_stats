@@ -95,6 +95,8 @@ func (e *Engine) Load() error {
 		return err
 	}
 
+	log.Printf("[load] Loading data for %d tokens from Redis", len(all))
+
 	nowMin := unixMin(time.Now().UTC())
 	start := nowMin - int64(windowMinutes) + 1
 	end := nowMin
@@ -105,11 +107,13 @@ func (e *Engine) Load() error {
 	e.series = make(map[string]*series, len(all))
 
 	for token, fields := range all {
-		s := &series{StartMinute: start}
-		// buckets нулями по умолчанию
+		s := &series{
+			StartMinute: start,
+			Buckets:     make([]model.Bucket, windowMinutes),
+		}
 
 		for fname, raw := range fields {
-			// ожидаем формат "<minute>#<kind>", где kind ∈ {c,u,q}
+			// data format: "<minute>#<kind>",  kind ∈ {c,u,q}
 			parts := strings.Split(fname, "#")
 			if len(parts) != 2 {
 				continue
@@ -120,7 +124,7 @@ func (e *Engine) Load() error {
 			}
 			kind := parts[1]
 
-			// игнорируем всё вне нашего окна [start..end]
+			// ignore all not in our window [start..end]
 			if minute < start || minute > end {
 				continue
 			}
@@ -148,6 +152,7 @@ func (e *Engine) Load() error {
 
 		e.series[token] = s
 	}
+	log.Printf("[load] Successfully loaded %d token series", len(e.series))
 
 	return nil
 }
