@@ -19,7 +19,7 @@ type Config struct {
 // Load default values for using locally
 func Load() Config {
 	return Config{
-		RedisURL:      getEnv("REDIS_URL", "redis://localhost:6379"),
+		RedisURL:      getEnv("REDIS_URL", "localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		RedisDB:       mustAtoi(getEnv("REDIS_DB", "0")),
 		HttpAddr:      getEnv("HTTP_ADDR", ":8080"),

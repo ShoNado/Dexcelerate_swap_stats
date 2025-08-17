@@ -1,0 +1,42 @@
+services:
+  app:
+    build:
+      context: .
+    image: dexcelerate-swap-stats:local
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      HTTP_ADDR: ":8080"
+      REDIS_URL: "redis:6379"
+      REDIS_PASSWORD: ""
+      REDIS_DB: "0"
+      DEDUPE_TTL: "25h"
+      DEBUG: "false"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  redis-data:

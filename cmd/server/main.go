@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-
 	"log"
 	"net/http"
 	"os"
@@ -59,7 +58,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case ev := <-events:
-				applied, err := store.ApplyEvent(ev)
+				applied, err := eng.Apply(ev)
 				if err != nil {
 					log.Println("[error] Failed to apply event:", err)
 				} else if !applied {
@@ -120,8 +119,8 @@ func DemoProducer(_ context.Context, out chan model.SwapEvent) {
 		out <- ev
 
 		//simulate duplicates
-		if id%123 == 0 {
+		/*if id%123 == 0 {
 			out <- ev
-		}
+		}*/
 	}
 }

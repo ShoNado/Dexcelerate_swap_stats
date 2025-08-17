@@ -42,6 +42,7 @@ func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "token required", http.StatusBadRequest)
 		return
 	}
+
 	st := s.engine.Stats(token, time.Now())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(st)

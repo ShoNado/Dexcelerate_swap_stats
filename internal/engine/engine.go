@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -65,25 +66,28 @@ func (e *Engine) Stats(token string, now time.Time) model.Stats {
 		}
 		var bucket model.Bucket
 		var idx int
+		fmt.Println(from, nowMin)
 		for m := from; m <= nowMin; m++ {
 			idx = int(m-s.StartMinute) % windowMinutes
+			fmt.Println(s.Buckets[idx])
 			bucket.Count += s.Buckets[idx].Count
 			bucket.USD += s.Buckets[idx].USD
 			bucket.Quantity += s.Buckets[idx].Quantity
 		}
+		fmt.Println(bucket)
 		return bucket
 	}
 
 	return model.Stats{
 		Token:          token,
-		BucketMinutes5: sumRange(5),
-		BucketHours1:   sumRange(60),
+		BucketMinutes5: sumRange(1), // for testing
+		BucketHours1:   sumRange(2),
 		BucketHours24:  sumRange(windowMinutes),
 		UpdatedAt:      time.Now().Unix(),
 	}
 }
 
-// load  returns data from redis to in-memory store if application restarted
+// load returns data from redis to in-memory store if application restarted
 func (e *Engine) Load() error {
 	all, err := e.store.LoadAllSeries()
 	if err != nil {
@@ -109,7 +113,7 @@ func (e *Engine) Load() error {
 			}
 			if minute < s.StartMinute || minute > s.StartMinute+windowMinutes-1 {
 				log.Println("[err] How we got out of range minute:", minute, "for token", token)
-				continue // skip out of range or idk?
+				continue // skip out of range or IDK?
 			}
 			idx := int((minute - s.StartMinute) % windowMinutes)
 			switch kind {
@@ -148,8 +152,9 @@ func (e *Engine) Apply(ev model.SwapEvent) (bool, error) {
 	s := e.ensureSeries(ev.TokenID, now)
 	e.advanceTo(s, unixMin(now))
 	evMin := unixMin(ev.ExecutedAt)
+	var idx int
 	if evMin >= s.StartMinute {
-		idx := int((evMin - s.StartMinute) % windowMinutes)
+		idx = int((evMin - s.StartMinute) % windowMinutes)
 		b := s.Buckets[idx]
 		b.Count++
 		b.USD += ev.USD
@@ -159,8 +164,8 @@ func (e *Engine) Apply(ev model.SwapEvent) (bool, error) {
 	e.mu.Unlock()
 
 	// Broadcast updated stats via webSocket
-	st := e.Stats(ev.TokenID, time.Now())
-	e.wsHub.Broadcast(ev.TokenID, st)
+	//st := e.Stats(ev.TokenID, time.Now())
+	//e.wsHub.Broadcast(ev.TokenID, st)
 	return true, nil
 }
 

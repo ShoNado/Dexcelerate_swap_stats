@@ -55,9 +55,14 @@ func (s *Store) ApplyEvent(ev model.SwapEvent) (bool, error) {
 		return false, err
 	}
 
-	//idk if the result is an integer or string, check if it equals 1
-	if res.(int) == 1 || res.(string) == "1" {
-		return true, nil
+	switch v := res.(type) {
+	case int64:
+		return v == 1, nil
+	case string:
+		// some Redis libs return string
+		if v == "1" {
+			return true, nil
+		}
 	}
 	return false, fmt.Errorf("unepected result from redis: %v", res)
 }
