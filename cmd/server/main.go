@@ -64,7 +64,7 @@ func main() {
 				if err != nil {
 					log.Println("[error] Failed to apply event:", err)
 				} else if !applied {
-					log.Println("[error] Event is duplicate, not applied:", ev.EventID)
+					log.Println("[info] Event is duplicate, not applied:", ev.EventID)
 				}
 			}
 		}
@@ -121,7 +121,7 @@ func DemoProducer(_ context.Context, out chan model.SwapEvent) {
 		out <- ev
 
 		//simulate duplicates
-		if id%1234 == 0 {
+		if id%12345 == 0 {
 			out <- ev
 		}
 	}

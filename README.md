@@ -12,7 +12,7 @@ git clone https://github.com/ShoNado/Dexcelerate_swap_stats.git
 ### Locally
 
 ```bash
-go mod tidy
+go mod download
 go run cmd/server/main.go
 ```
 ### Using Docker
