@@ -30,9 +30,9 @@ type Bucket struct {
 
 // Stats: if more various time Interval needed we can add here or create custom one
 type Stats struct {
-	Token          string `json:"token"`
-	BucketMinutes5 Bucket `json:"bucket_minutes_5"`
-	BucketHours1   Bucket `json:"bucket_hours_1"`
-	BucketHours24  Bucket `json:"bucket_hours_24"`
-	UpdatedAt      int64  `json:"updated_at"`
+	Token          string    `json:"token"`
+	BucketMinutes5 Bucket    `json:"bucket_minutes_5"`
+	BucketHours1   Bucket    `json:"bucket_hours_1"`
+	BucketHours24  Bucket    `json:"bucket_hours_24"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }

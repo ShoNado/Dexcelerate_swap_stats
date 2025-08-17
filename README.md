@@ -19,8 +19,18 @@ go run cmd/server/main.go
 ```bash
 docker compose up --build
 ```
----
+### Check for Work
+- http://localhost:8080/stats?token=BTC 
+- http://localhost:8080/healthz 
+- ws://localhost:8080/ws
 
+```bash
+curl http://localhost:8080/healthz
+curl http://localhost:8080/stats?token=BTC 
+curl http://localhost:8080/stats?token=WRONG_TOKEN
+```
+
+---
 # Architecture
 
 ![img.png](img.png)

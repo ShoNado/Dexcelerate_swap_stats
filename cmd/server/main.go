@@ -21,6 +21,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// supported tokens
+var tokens = []string{"ETH", "BTC", "SOL"}
+
 func main() {
 	log.Println("[boot] Starting server")
 	cfg := config.GetConfig()
@@ -103,7 +106,6 @@ func DemoProducer(_ context.Context, out chan model.SwapEvent) {
 	defer t.Stop()
 
 	id := 0
-	tokens := []string{"ETH", "BTC", "SOL"}
 	var ev model.SwapEvent
 
 	for now := range t.C {

@@ -58,7 +58,7 @@ func (e *Engine) Stats(token string, now time.Time) model.Stats {
 	defer e.mu.Unlock()
 	s, ok := e.series[token]
 	if !ok { //if no information about token return empty
-		return model.Stats{Token: token, UpdatedAt: time.Now().Unix()}
+		return model.Stats{Token: token, UpdatedAt: time.Now()}
 	}
 	nowMin := unixMin(now)
 	sumRange := func(minutes int64) model.Bucket {
@@ -84,7 +84,7 @@ func (e *Engine) Stats(token string, now time.Time) model.Stats {
 		BucketMinutes5: sumRange(5),
 		BucketHours1:   sumRange(60),
 		BucketHours24:  sumRange(windowMinutes),
-		UpdatedAt:      time.Now().Unix(),
+		UpdatedAt:      time.Now(),
 	}
 }
 
