@@ -16,8 +16,8 @@ type Config struct {
 	Debug         bool
 }
 
-// Load default values for using locally
-func Load() Config {
+// GetConfig default values for using locally
+func GetConfig() Config {
 	return Config{
 		RedisURL:      getEnv("REDIS_URL", "localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),

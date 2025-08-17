@@ -23,9 +23,9 @@ type SwapEvent struct {
 }
 
 type Bucket struct {
-	Count    uint64
-	USD      float64
-	Quantity float64
+	Count    uint64  `json:"transaction counts"`
+	USD      float64 `json:"total usd volume"`
+	Quantity float64 `json:"total token volume"`
 }
 
 // Stats: if more various time Interval needed we can add here or create custom one

@@ -23,7 +23,7 @@ import (
 
 func main() {
 	log.Println("[boot] Starting server")
-	cfg := config.Load()
+	cfg := config.GetConfig()
 
 	// start redis
 	rdb := redis.NewClient(&redis.Options{
@@ -99,7 +99,7 @@ func main() {
 
 // DemoProducer generates swap events and sends them to the provided channel at a fixed interval using a ticker.
 func DemoProducer(_ context.Context, out chan model.SwapEvent) {
-	t := time.NewTicker(1 * time.Millisecond)
+	t := time.NewTicker(1 * time.Millisecond) //1000 swap/sec
 	defer t.Stop()
 
 	id := 0
@@ -121,8 +121,8 @@ func DemoProducer(_ context.Context, out chan model.SwapEvent) {
 		out <- ev
 
 		//simulate duplicates
-		/*if id%123 == 0 {
+		if id%1234 == 0 {
 			out <- ev
-		}*/
+		}
 	}
 }

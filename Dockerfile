@@ -3,7 +3,7 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 # Cache deps
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
 # Copy sources
