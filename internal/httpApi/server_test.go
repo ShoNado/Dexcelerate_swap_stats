@@ -37,7 +37,7 @@ func (m *mockEngine) Load() error {
 	return nil
 }
 
-func (m *mockEngine) Apply(ev model.SwapEvent) (bool, error) {
+func (m *mockEngine) Apply(_ model.SwapEvent) (bool, error) {
 	return true, nil
 }
 

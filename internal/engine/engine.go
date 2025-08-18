@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"Dexcelerate_swap_stats/internal/model"
-	"Dexcelerate_swap_stats/internal/storage/redisStorage"
 	"Dexcelerate_swap_stats/internal/webSocket"
 
 	"github.com/gorilla/websocket"
@@ -19,6 +18,15 @@ import (
 const (
 	windowMinutes = 24 * 60
 )
+
+// StorageInterface определяет интерфейс для storage
+type StorageInterface interface {
+	ApplyEvent(ev model.SwapEvent) (bool, error)
+	LoadAllSeries() (map[string]map[string]string, error)
+	GetLastEventID() (string, error)
+	GetEventCounter() int64
+	SetEventCounter(counter int64)
+}
 
 // bucket for 24 hours for each minute
 type series struct {
@@ -33,7 +41,7 @@ type Engine struct {
 	mu     sync.Mutex
 	series map[string]*series
 
-	store *redisStorage.Store
+	store StorageInterface // Используем интерфейс вместо конкретного типа
 	wsHub *webSocket.Hub
 }
 
@@ -44,7 +52,7 @@ type EngineInterface interface {
 	StartPeriodicUpdates()
 }
 
-func NewEngine(store *redisStorage.Store, wsHub *webSocket.Hub) *Engine {
+func NewEngine(store StorageInterface, wsHub *webSocket.Hub) *Engine {
 	return &Engine{
 		series: make(map[string]*series),
 		store:  store,
