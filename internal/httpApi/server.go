@@ -6,16 +6,24 @@ import (
 	"time"
 
 	"Dexcelerate_swap_stats/internal/engine"
+	"Dexcelerate_swap_stats/internal/model"
 	"Dexcelerate_swap_stats/internal/webSocket"
 )
 
+type EngineInterface interface {
+	Stats(token string, now time.Time) model.Stats
+	Load() error
+	Apply(ev model.SwapEvent) (bool, error)
+	StartPeriodicUpdates()
+}
+
 type server struct {
-	engine *engine.Engine
+	engine EngineInterface
 	wsHub  *webSocket.Hub
 	mux    *http.ServeMux
 }
 
-func NewServer(engine *engine.Engine, wsHub *webSocket.Hub) http.Handler {
+func NewServer(engine EngineInterface, wsHub *webSocket.Hub) http.Handler {
 	s := &server{
 		engine: engine,
 		wsHub:  wsHub,
@@ -28,7 +36,14 @@ func NewServer(engine *engine.Engine, wsHub *webSocket.Hub) http.Handler {
 func (s *server) routes() {
 	s.mux.HandleFunc("/healthz", s.handleHealth)
 	s.mux.HandleFunc("/stats", s.handleStats)
-	s.mux.Handle("/ws", engine.ServeWS(s.wsHub, s.engine))
+
+	if realEngine, ok := s.engine.(*engine.Engine); ok {
+		s.mux.Handle("/ws", engine.ServeWS(s.wsHub, realEngine))
+	} else {
+		s.mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "WebSocket not supported in test mode", http.StatusNotImplemented)
+		})
+	}
 }
 
 func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
