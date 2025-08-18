@@ -126,6 +126,14 @@ func (e *Engine) Load() error {
 		return err
 	}
 
+	// trying to recover lastEventId
+	lastEventID, err := e.store.GetLastEventID()
+	if err != nil {
+		log.Printf("[load] Warning: Failed to load lastEventID: %v", err)
+	} else if lastEventID != "" {
+		log.Printf("[load] Last saved eventID: %s", lastEventID)
+	}
+
 	log.Printf("[load] Loading data for %d tokens from Redis", len(all))
 
 	nowMin := unixMin(time.Now().UTC())

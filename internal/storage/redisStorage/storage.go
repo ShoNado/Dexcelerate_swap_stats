@@ -20,20 +20,24 @@ import (
 var LuaScript string
 
 type Store struct {
-	cli        *redis.Client
-	dedupleTTL int64
-	tokensKey  string
-	ctx        context.Context
-	script     string
+	cli          *redis.Client
+	dedupleTTL   int64
+	tokensKey    string
+	ctx          context.Context
+	script       string
+	eventCounter int64
+	lastEventKey string
 }
 
 func NewStore(cli *redis.Client, tokensKey string, dedupleTTL time.Duration) *Store {
 	return &Store{
-		cli:        cli,
-		dedupleTTL: int64(dedupleTTL.Seconds()), //
-		tokensKey:  tokensKey,
-		ctx:        context.Background(),
-		script:     LuaScript,
+		cli:          cli,
+		dedupleTTL:   int64(dedupleTTL.Seconds()),
+		tokensKey:    tokensKey,
+		ctx:          context.Background(),
+		script:       LuaScript,
+		eventCounter: 0,
+		lastEventKey: "lastEventID",
 	}
 }
 
@@ -55,16 +59,49 @@ func (s *Store) ApplyEvent(ev model.SwapEvent) (bool, error) {
 		return false, err
 	}
 
+	var applied bool
 	switch v := res.(type) {
 	case int64:
-		return v == 1, nil
+		applied = v == 1
 	case string:
 		// some Redis libs return string
-		if v == "1" {
-			return true, nil
+		applied = v == "1"
+	default:
+		return false, fmt.Errorf("unexpected result from redis: %v", res)
+	}
+
+	if applied {
+		s.eventCounter++
+		if s.eventCounter%100 == 0 {
+			if err := s.setLastEventID(ev.EventID); err != nil {
+				log.Printf("[warning] Failed to set lastEventID: %v", err)
+			}
 		}
 	}
-	return false, fmt.Errorf("unepected result from redis: %v", res)
+
+	return applied, nil
+}
+
+func (s *Store) setLastEventID(eventID string) error {
+	return s.cli.Set(s.ctx, s.lastEventKey, eventID, 0).Err()
+}
+
+func (s *Store) GetLastEventID() (string, error) {
+	result, err := s.cli.Get(s.ctx, s.lastEventKey).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	return result, err
+}
+
+// GetEventCounter returns current event counter value
+func (s *Store) GetEventCounter() int64 {
+	return s.eventCounter
+}
+
+// SetEventCounter sets event counter value (useful for initialization after restart)
+func (s *Store) SetEventCounter(counter int64) {
+	s.eventCounter = counter
 }
 
 func (s *Store) LoadAllSeries() (map[string]map[string]string, error) {
@@ -77,12 +114,12 @@ func (s *Store) LoadAllSeries() (map[string]map[string]string, error) {
 	}
 	for _, token := range tokens {
 		key := "series:" + token
-		fileds, err := s.cli.HGetAll(s.ctx, key).Result()
+		fields, err := s.cli.HGetAll(s.ctx, key).Result()
 		if err != nil {
 			log.Printf("Failed to get key %s: %v", key, err)
 			//or we can return with error and stop processing
 		}
-		out[token] = fileds
+		out[token] = fields
 	}
 	return out, nil
 }
