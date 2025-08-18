@@ -41,6 +41,7 @@ type EngineInterface interface {
 	Stats(token string, now time.Time) model.Stats
 	Load() error
 	Apply(ev model.SwapEvent) (bool, error)
+	StartPeriodicUpdates()
 }
 
 func NewEngine(store *redisStorage.Store, wsHub *webSocket.Hub) *Engine {
@@ -56,11 +57,15 @@ func unixMin(t time.Time) int64 { return t.UTC().Unix() / 60 }
 func (e *Engine) Stats(token string, now time.Time) model.Stats {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s, ok := e.series[token]
 	if !ok { //if no information about token return empty
 		return model.Stats{Token: token, UpdatedAt: time.Now()}
 	}
+
 	nowMin := unixMin(now)
+	e.advanceTo(s, nowMin) //ensure we have fresh stats
+
 	sumRange := func(minutes int64) model.Bucket {
 		from := nowMin - minutes + 1
 		if from < s.StartMinute {
@@ -85,6 +90,32 @@ func (e *Engine) Stats(token string, now time.Time) model.Stats {
 		BucketHours1:   sumRange(60),
 		BucketHours24:  sumRange(windowMinutes),
 		UpdatedAt:      time.Now(),
+	}
+}
+
+func (e *Engine) StartPeriodicUpdates() {
+	ticker := time.NewTicker(time.Minute)
+	go func() {
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			e.broadcastAllStats()
+		}
+	}()
+}
+
+func (e *Engine) broadcastAllStats() {
+	e.mu.Lock()
+	tokens := make([]string, 0, len(e.series))
+	for token := range e.series {
+		tokens = append(tokens, token)
+	}
+	e.mu.Unlock()
+
+	now := time.Now()
+	for _, token := range tokens {
+		stats := e.Stats(token, now)
+		e.wsHub.Broadcast(token, stats)
 	}
 }
 
@@ -233,10 +264,9 @@ func (e *Engine) advanceTo(s *series, nowMin int64) {
 		return
 	}
 
-	offset := steps
-	if offset >= 0 {
-		copy(s.Buckets, s.Buckets[offset:])
-		for i := windowMinutes - offset; i < windowMinutes; i++ {
+	if steps >= 0 {
+		copy(s.Buckets, s.Buckets[steps:])
+		for i := windowMinutes - steps; i < windowMinutes; i++ {
 			s.Buckets[i] = model.Bucket{}
 		}
 	}

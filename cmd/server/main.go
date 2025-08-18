@@ -50,6 +50,10 @@ func main() {
 		log.Println("[boot] Data loaded from redis")
 	}
 
+	// start periodic updates for WebSocket clients
+	log.Println("[boot] Starting periodic WebSocket updates")
+	eng.StartPeriodicUpdates()
+
 	// consumer loop to simulate reading from kafka
 	events := make(chan model.SwapEvent, 8192) // buffer size 2^13
 	log.Println("[boot] Starting demo producer")
