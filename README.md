@@ -73,3 +73,7 @@ curl http://localhost:8080/stats?token=WRONG_TOKEN
   for hot tokens, run identical pods but in different consumer groups.
   If even higher throughput is required, migrate from Kafka to **gRPC**.
 
+p.s.:
+A known bug is that the statistics are displayed for **absolute minutes** instead of being **relative to the time of the request**.  
+The solution would be to switch to **per-second buckets** and calculate them separately for each request,  
+or alternatively, use a **cron job** to push data into WebSockets and update stats in buskets for GET requests. 
